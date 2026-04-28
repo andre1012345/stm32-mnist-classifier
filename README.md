@@ -1,179 +1,205 @@
-# STM32 MNIST Binary Classifier
+# HPC Intrusion Detection — Hybrid MPI + OpenMP Ensemble Classifier
 
-Embedded machine learning project that deploys a neural network on an STM32F767ZI microcontroller. The model performs real-time binary classification: given a 28×28 grayscale image, it determines whether the digit is a **3** or not.
+> Parallel machine learning pipeline for network intrusion detection using the CICIDS2017 dataset.  
+> Implements a heterogeneous ensemble (Random Forest + Logistic Regression + K-NN) with a hybrid MPI + OpenMP parallelisation strategy.
 
 ---
 
-## Overview
+## Results Summary
 
-| Item | Detail |
+| Configuration | Ranks | OMP Threads | Time | Speedup | Efficiency | F1 |
+|---|---|---|---|---|---|---|
+| Sequential baseline | 1 | 1 | 589.227s | 1.00x | 100.0% | 0.9930 |
+| OpenMP only | 1 | 4 | 209.386s | 2.81x | 70.3% | 0.9930 |
+| MPI + OpenMP | 3 | 2 | 196.367s | **3.00x** | **100.0%** | 0.9930 |
+| MPI + OpenMP | 4 | 2 | 225.673s | 2.61x | 65.3% | 0.9899 |
+
+**Optimal configuration: p=3, 2 OpenMP threads per rank (Sp=3.00x, E=100%)**
+
+---
+
+## Architecture
+
+### Parallelisation Strategy (PCAM)
+
+```
+Rank 0  →  Random Forest training (OpenMP) + RF inference + Aggregator
+Rank 2  →  Logistic Regression training + LR inference
+Rank 1,3→  KNN workers — data-parallel reference set split (OpenMP)
+```
+
+### Two levels of parallelism
+
+**Task parallelism (MPI):** RF, LR, and KNN execute concurrently on dedicated ranks.  
+**Data parallelism (MPI + OpenMP):** KNN reference set split across worker ranks; inner distance loop parallelised with OpenMP threads within each rank.
+
+### Ensemble
+
+Weighted soft voting with empirically tuned weights and threshold:
+
+```
+RF weight=0.354  LR weight=0.302  KNN weight=0.343  τ=0.63
+```
+
+Weights derived from per-model validation F1 scores on the Python baseline.
+
+---
+
+## Project Structure
+
+```
+HPC-intrusion/
+├── data/
+│   └── raw/                    ← CICIDS2017 CSV files (not tracked)
+├── src/                        ← Python ML pipeline
+│   ├── config.py               ← paths, hyperparameters
+│   ├── prepare_data.py         ← load, clean, normalise, stratified split
+│   ├── train_evaluate.py       ← train models, ROC/PR curves, threshold tuning
+│   ├── export_for_cpp.py       ← export numpy artifacts to binary for C++
+│   └── artifacts/              ← generated numpy + binary files (not tracked)
+├── src_cpp/                    ← C++ HPC implementation
+│   ├── main.cpp                ← sequential baseline
+│   ├── main_mpi.cpp            ← hybrid MPI + OpenMP
+│   ├── common.h                ← types, timer, metrics
+│   ├── data_io.h               ← binary file loading
+│   ├── rf.h                    ← Random Forest (OpenMP parallel)
+│   ├── lr.h                    ← Logistic Regression
+│   ├── knn.h                   ← KNN inference (OpenMP parallel)
+│   └── ensemble.h              ← weighted soft voting
+└── results/                    ← plots and metrics (generated)
+    ├── roc_curves.png
+    ├── pr_curves.png
+    ├── threshold_tuning.png
+    └── metrics.json
+```
+
+---
+
+## Requirements
+
+### Python
+```
+python >= 3.10
+numpy pandas scikit-learn matplotlib faiss-cpu
+```
+
+### C++
+```
+g++ >= 11  with C++17
+OpenMPI >= 4.1
+```
+
+---
+
+## How to Run
+
+### Step 1 — Python ML Pipeline
+
+```bash
+cd src
+
+# Install dependencies
+pip install numpy pandas scikit-learn matplotlib faiss-cpu
+
+# Edit DATA_DIR in config.py to point at your CICIDS2017 CSV folder
+
+# 1. Clean, normalise, stratified split
+python3 prepare_data.py
+
+# 2. Train models, tune threshold, generate plots
+python3 train_evaluate.py
+
+# 3. Export binary files for C++
+python3 export_for_cpp.py
+```
+
+### Step 2 — Sequential Baseline
+
+```bash
+cd src_cpp
+g++ -O3 -std=c++17 -o intrusion main.cpp
+./intrusion
+```
+
+### Step 3 — OpenMP Only
+
+```bash
+g++ -O3 -std=c++17 -fopenmp -o intrusion_omp main.cpp
+OMP_NUM_THREADS=4 ./intrusion_omp
+```
+
+### Step 4 — Hybrid MPI + OpenMP
+
+```bash
+mpic++ -O3 -std=c++17 -fopenmp -o intrusion_mpi main_mpi.cpp
+
+# p=3 — optimal configuration
+OMP_NUM_THREADS=2 mpirun -np 3 ./intrusion_mpi
+
+# p=4 — strong scaling
+OMP_NUM_THREADS=2 mpirun -np 4 ./intrusion_mpi
+```
+
+---
+
+## Dataset
+
+**CICIDS2017** — Canadian Institute for Cybersecurity Intrusion Detection Dataset 2017.  
+Available at: https://www.kaggle.com/datasets/chethuhn/network-intrusion-dataset
+
+15 traffic classes across 8 capture days:
+
+| Class | Samples (sampled) |
 |---|---|
-| Board | STM32F767ZI Nucleo-144 |
-| Framework | STM32CubeIDE + X-CUBE-AI |
-| Model | Dense Neural Network (DNN) |
-| Dataset | MNIST handwritten digits |
-| Task | Binary classification — digit 3 vs all others |
-| Output | UART at 115200 baud → readable in PuTTY |
+| BENIGN | 322,950 |
+| DDoS | 28,356 |
+| PortScan | 27,739 |
+| DoS Hulk | 16,679 |
+| FTP-Patator | 890 |
+| SSH-Patator | 661 |
+| Bot | 514 |
+| Web Attacks | 639 |
+| Other DoS | 1,556 |
+
+**Sampling:** 50,000 rows per CSV file (stratified), 70/30 train/test split.  
+**Normalisation:** StandardScaler fitted on training set only — no data leakage.
 
 ---
 
-## How It Works
+## Key Design Decisions
 
-```
-MNIST dataset
-     │
-     ▼
-[Colab Notebook 1]  ──  Train DNN  ──  Export .tflite
-     │
-     ▼
-[X-CUBE-AI]  ──  Convert .tflite  ──  Generate C network files
-     │
-     ▼
-[STM32CubeIDE]  ──  Build firmware  ──  Flash to board
-     │
-     ▼
-[PuTTY @ 115200]  ──  Read classification results
-```
+**Why all 8 days?**  
+The original project used only Tuesday's capture. This misses DDoS, PortScan, Bot, and Web Attack classes entirely. Using all 8 days produces a model that generalises across the full threat landscape.
 
----
+**Why weighted soft voting?**  
+Individual model F1 scores differ significantly (RF=0.997, KNN=0.966, LR=0.850). Equal weighting would let the weakest model drag down the ensemble. Weights proportional to validation F1 ensure the strongest model dominates.
 
-## Neural Network Architecture
+**Why τ=0.63 and not 0.4?**  
+The threshold was chosen empirically by maximising F1 on the validation set across the range [0.1, 0.9]. The original hardcoded τ=0.4 was unjustified.
 
-Trained in Google Colab on the MNIST dataset. Input images are normalized to [0.0, 1.0].
+**Why p=3 is optimal?**  
+RF training on Rank 0 is the sequential bottleneck (~143s). Adding more KNN workers (p=4) cannot reduce this — they finish in ~45s and wait. This is Amdahl's Law: sequential fraction s≈33% caps speedup at Sp_max=3.0x.
 
-```
-Input:    28×28 grayscale image  (784 values)
-Flatten:  784-dimensional vector
-Dense:    128 neurons, ReLU activation
-Dense:    64  neurons, ReLU activation
-Output:   1   neuron,  Sigmoid activation  →  probability [0.0, 1.0]
-```
-
-Output > 0.5 → classified as digit 3
-Output ≤ 0.5 → classified as not digit 3
+**Why KNN data parallelism introduces approximation?**  
+Each worker finds k=15 nearest neighbours from its local chunk rather than the global reference set. Equal-weight averaging of partial probabilities is a principled approximation. The accuracy cost is F1: 0.9930 → 0.9899 at p=4.
 
 ---
 
-## Repository Structure
+## Hardware
 
-```
-stm32-mnist-classifier/
-│
-├── notebooks/
-│   ├── 01_train_model.ipynb          # Train and export the model to .tflite
-│   └── 02_generate_test_data.ipynb   # Generate image_data.c from MNIST test set
-│
-├── Core/
-│   ├── Inc/
-│   │   ├── main.h
-│   │   └── image_data.h              # Declares test_images and test_labels arrays
-│   └── Src/
-│       ├── main.c                    # Entry point — runs inference once then halts
-│       └── image_data.c              # 20 test images as float arrays (10 threes, 10 non-threes)
-│
-├── X-CUBE-AI/
-│   └── App/
-│       ├── app_x-cube-ai.c           # Inference loop — acquire, run, post-process
-│       ├── app_x-cube-ai.h
-│       ├── network.c / network.h     # Auto-generated by X-CUBE-AI from .tflite
-│       ├── network_data.c / .h       # Model weights
-│       ├── network_data_params.c/.h  # Model parameters
-│       ├── network_config.h          # Network configuration macros
-│       └── network_generate_report.txt
-│
-├── Core/Startup/
-│   └── startup_stm32f767zitx.s      # Startup assembly
-│
-├── STM32F767ZITX_FLASH.ld           # Linker script (Flash)
-├── STM32F767ZITX_RAM.ld             # Linker script (RAM)
-├── Attempt2.ioc                     # CubeMX configuration
-├── .cproject / .project             # STM32CubeIDE project files
-├── LICENSE_X-CUBE-AI.txt
-└── .gitignore
-```
-
----
-
-## How to Reproduce
-
-### Step 1 — Train the model
-
-Open `notebooks/01_train_model.ipynb` in Google Colab and run all cells.
-This trains the DNN on MNIST and exports `mnist_model.tflite`.
-
-### Step 2 — Generate test data
-
-Open `notebooks/02_generate_test_data.ipynb` in Google Colab and run all cells.
-This generates `image_data.c` and `image_data.h` containing 20 test images
-(10 threes and 10 non-threes) as normalized float arrays.
-
-Place the generated files in:
-- `Core/Src/image_data.c`
-- `Core/Inc/image_data.h`
-
-### Step 3 — Import model into X-CUBE-AI
-
-1. Open STM32CubeIDE and load `Attempt2.ioc` in CubeMX
-2. Go to **Software Packs → X-CUBE-AI**
-3. Add network → select `mnist_model.tflite`
-4. Click **Analyze** then **Generate Code**
-5. This regenerates the files in `X-CUBE-AI/App/`
-
-### Step 4 — Build and flash
-
-1. Open the project in STM32CubeIDE
-2. Build: **Project → Build All**
-3. Flash: **Run → Debug** (or Run)
-
-### Step 5 — Read results
-
-Open PuTTY with these settings:
-
-| Setting | Value |
+| Component | Specification |
 |---|---|
-| Port | COM port of the Nucleo board |
-| Baud rate | 115200 |
-| Data bits | 8 |
-| Stop bits | 1 |
-| Parity | None |
-
-Press the **black RESET button** on the Nucleo board.
-
----
-
-## Expected Output
-
-```
-Image  0 | Expected: IS 3    | Got: IS 3    | OK
-Image  1 | Expected: IS 3    | Got: IS 3    | OK
-Image  2 | Expected: IS 3    | Got: IS 3    | OK
-...
-Image 10 | Expected: NOT 3   | Got: NOT 3   | OK
-Image 11 | Expected: NOT 3   | Got: NOT 3   | OK
-...
-
-Accuracy: 20/20 correct
-```
+| System | HP EliteBook 830 G5 |
+| CPU | Intel Core i5 8th Gen @ 1.70GHz |
+| Cores | 4 physical / 8 logical (HT) |
+| RAM | 16GB DDR4 |
+| OS | Windows 11 / WSL2 Ubuntu 22.04 |
+| MPI | OpenMPI 4.1.2 |
+| Compiler | GCC/G++ 11.4.0 `-O3 -fopenmp` |
 
 ---
 
-## Hardware Setup
+## Author
 
-- **Board:** NUCLEO-F767ZI
-- **Connection:** USB cable (CN1 connector) to PC
-- **UART:** USART3 on pins PD8 (TX) / PD9 (RX) — routed through ST-LINK to USB
-
-No external wiring required. The ST-LINK USB connection handles both flashing and UART communication.
-
----
-
-## Dependencies
-
-| Tool | Version |
-|---|---|
-| STM32CubeIDE | 2.1.1 |
-| X-CUBE-AI | 10.x |
-| STM32CubeMX | included in IDE |
-| Python | 3.x (Colab) |
-| TensorFlow / Keras | latest (Colab) |
-| PuTTY | any |
+Andrea Fascì — High Performance Computing, Università degli Studi di Messina, 2025/2026  
+GitHub: https://github.com/andre1012345/HPC-intrusion
