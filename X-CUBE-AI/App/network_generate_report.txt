@@ -1,0 +1,196 @@
+ST Edge AI Core v2.2.0-20266 2adc00962
+Created date          : 2026-04-22 13:21:46
+Parameters            : generate --target stm32f7 --name network -m C:/Users/Utente/Downloads/mnist_model.tflite --compression none --verbosity 1 --workspace C:/Users/Utente/AppData/Local/Temp/mxAI_workspace44764071047630015755798349979768904 --output C:/Users/Utente/.stm32cubemx/network_output
+
+Exec/report summary (generate)
+--------------------------------------------------------------------------------------------------------------
+model file         :   C:\Users\Utente\Downloads\mnist_model.tflite                                           
+type               :   tflite                                                                                 
+c_name             :   network                                                                                
+compression        :   none                                                                                   
+options            :   allocate-inputs, allocate-outputs                                                      
+optimization       :   balanced                                                                               
+target/series      :   stm32f7                                                                                
+workspace dir      :   C:\Users\Utente\AppData\Local\Temp\mxAI_workspace44764071047630015755798349979768904   
+output dir         :   C:\Users\Utente\.stm32cubemx\network_output                                            
+model_fmt          :   float                                                                                  
+model_name         :   mnist_model                                                                            
+model_hash         :   0xd7ecac775088ac13db4a657a2b07258b                                                     
+params #           :   108,801 items (425.00 KiB)                                                             
+--------------------------------------------------------------------------------------------------------------
+input 1/1          :   'serving_default_ke.._tensor_50', f32(1x28x28), 3.06 KBytes, activations               
+output 1/1         :   'nl_7', f32(1x1), 4 Bytes, activations                                                 
+macc               :   109,003                                                                                
+weights (ro)       :   435,204 B (425.00 KiB) (1 segment)                                                     
+activations (rw)   :   3,648 B (3.56 KiB) (1 segment) *                                                       
+ram (total)        :   3,648 B (3.56 KiB) = 3,648 + 0 + 0                                                     
+--------------------------------------------------------------------------------------------------------------
+(*) 'input'/'output' buffers are allocated in the activations buffer
+
+Model name - mnist_model
+------ ------------------------------------------ ----------------- ----------------- --------- -------------------------------- --- --------------- ------------------- ---------------------------- 
+m_id   layer (type,original)                      oshape            param/size             macc                     connected to   | c_size          c_macc              c_type                       
+------ ------------------------------------------ ----------------- ----------------- --------- -------------------------------- --- --------------- ------------------- ---------------------------- 
+0      serving_default_ke.._tensor_50 (Input, )   [b:1,h:28,c:28]                                                                  |                                     
+------ ------------------------------------------ ----------------- ----------------- --------- -------------------------------- --- --------------- ------------------- ---------------------------- 
+3      reshape_3 (Reshape, RESHAPE)               [b:1,c:784]                                     serving_default_ke.._tensor_50   |                                     
+------ ------------------------------------------ ----------------- ----------------- --------- -------------------------------- --- --------------- ------------------- ---------------------------- 
+4      arith_constant2 (Placeholder, )            [b:128,c:784]     100,352/401,408                                                | +512(+0.1%)     +100,608(+100.0%)   Dense_/Nonlinearity_[0, 1]   
+       arith_constant5 (Placeholder, )            [b:128]           128/512                                                        | -512(-100.0%)                       
+       gemm_4 (Gemm, FULLY_CONNECTED)             [b:1,c:128]                           100,480                        reshape_3   |                 -100,480(-100.0%)   
+                                                                                                                 arith_constant2   | 
+                                                                                                                 arith_constant5   | 
+       nl_4_nl (Nonlinearity, FULLY_CONNECTED)    [b:1,c:128]                               128                           gemm_4   |                 -128(-100.0%)       
+------ ------------------------------------------ ----------------- ----------------- --------- -------------------------------- --- --------------- ------------------- ---------------------------- 
+5      arith_constant1 (Placeholder, )            [b:64,c:128]      8,192/32,768                                                   | +256(+0.8%)     +8,320(+100.0%)     Dense_/Nonlinearity_[2, 3]   
+       arith_constant4 (Placeholder, )            [b:64]            64/256                                                         | -256(-100.0%)                       
+       gemm_5 (Gemm, FULLY_CONNECTED)             [b:1,c:64]                              8,256                          nl_4_nl   |                 -8,256(-100.0%)     
+                                                                                                                 arith_constant1   | 
+                                                                                                                 arith_constant4   | 
+       nl_5_nl (Nonlinearity, FULLY_CONNECTED)    [b:1,c:64]                                 64                           gemm_5   |                 -64(-100.0%)        
+------ ------------------------------------------ ----------------- ----------------- --------- -------------------------------- --- --------------- ------------------- ---------------------------- 
+6      arith_constant (Placeholder, )             [b:1,c:64]        64/256                                                         | +4(+1.6%)       +65(+100.0%)        Dense_[4]                    
+       arith_constant3 (Placeholder, )            [b:1]             1/4                                                            | -4(-100.0%)                         
+       gemm_6 (Gemm, FULLY_CONNECTED)             [b:1,c:1]                                  65                          nl_5_nl   |                 -65(-100.0%)        
+                                                                                                                  arith_constant   | 
+                                                                                                                 arith_constant3   | 
+------ ------------------------------------------ ----------------- ----------------- --------- -------------------------------- --- --------------- ------------------- ---------------------------- 
+7      nl_7 (Nonlinearity, LOGISTIC)              [b:1,c:1]                                  10                           gemm_6   |                                     Nonlinearity_[o][5]          
+------ ------------------------------------------ ----------------- ----------------- --------- -------------------------------- --- --------------- ------------------- ---------------------------- 
+model/c-model: macc=109,003/109,003  weights=435,204/435,204  activations=--/3,648 io=--/0
+
+
+
+Generated C-graph summary
+------------------------------------------------------------------------------------------------------------------------
+model name            : mnist_model
+c-name                : network
+c-node #              : 6
+c-array #             : 13
+activations size      : 3648 (1 segment)
+weights size          : 435204 (1 segment)
+macc                  : 109003
+inputs                : ['serving_default_keras_tensor_50_output']
+outputs               : ['nl_7_output']
+
+C-Arrays (13)
+------ ---------------------------------------- --------------- ------------------------- ------------- --------- 
+c_id   name (*_array)                           item/size       domain/mem-pool           c-type        comment   
+------ ---------------------------------------- --------------- ------------------------- ------------- --------- 
+0      gemm_4_bias                              128/512         weights/weights           const float             
+1      gemm_4_output                            128/512         activations/**default**   float                   
+2      gemm_4_weights                           100352/401408   weights/weights           const float             
+3      gemm_5_bias                              64/256          weights/weights           const float             
+4      gemm_5_output                            64/256          activations/**default**   float                   
+5      gemm_5_weights                           8192/32768      weights/weights           const float             
+6      gemm_6_bias                              1/4             weights/weights           const float             
+7      gemm_6_output                            1/4             activations/**default**   float                   
+8      gemm_6_weights                           64/256          weights/weights           const float             
+9      nl_4_nl_output                           128/512         activations/**default**   float                   
+10     nl_5_nl_output                           64/256          activations/**default**   float                   
+11     nl_7_output                              1/4             activations/**default**   float         /output   
+12     serving_default_keras_tensor_50_output   784/3136        activations/**default**   float         /input    
+------ ---------------------------------------- --------------- ------------------------- ------------- --------- 
+
+C-Layers (6)
+------ ---------------- ---- --------------- -------- -------- ------------------------------------------- ------------------- 
+c_id   name (*_layer)   id   layer_type      macc     rom      tensors                                     shape (array id)    
+------ ---------------- ---- --------------- -------- -------- ------------------------------------------- ------------------- 
+0      gemm_4           4    Dense           100480   401920   I: serving_default_keras_tensor_50_output   f32(1x28x28) (12)   
+                                                               W: gemm_4_weights                           f32(128x784) (2)    
+                                                               W: gemm_4_bias                              f32(128) (0)        
+                                                               O: gemm_4_output                            f32(1x128) (1)      
+------ ---------------- ---- --------------- -------- -------- ------------------------------------------- ------------------- 
+1      nl_4_nl          4    Nonlinearity    128      0        I: gemm_4_output                            f32(1x128) (1)      
+                                                               O: nl_4_nl_output                           f32(1x128) (9)      
+------ ---------------- ---- --------------- -------- -------- ------------------------------------------- ------------------- 
+2      gemm_5           5    Dense           8256     33024    I: nl_4_nl_output                           f32(1x128) (9)      
+                                                               W: gemm_5_weights                           f32(64x128) (5)     
+                                                               W: gemm_5_bias                              f32(64) (3)         
+                                                               O: gemm_5_output                            f32(1x64) (4)       
+------ ---------------- ---- --------------- -------- -------- ------------------------------------------- ------------------- 
+3      nl_5_nl          5    Nonlinearity    64       0        I: gemm_5_output                            f32(1x64) (4)       
+                                                               O: nl_5_nl_output                           f32(1x64) (10)      
+------ ---------------- ---- --------------- -------- -------- ------------------------------------------- ------------------- 
+4      gemm_6           6    Dense           65       260      I: nl_5_nl_output                           f32(1x64) (10)      
+                                                               W: gemm_6_weights                           f32(1x64) (8)       
+                                                               W: gemm_6_bias                              f32(1) (6)          
+                                                               O: gemm_6_output                            f32(1x1) (7)        
+------ ---------------- ---- --------------- -------- -------- ------------------------------------------- ------------------- 
+5      nl_7             7    Nonlinearity    10       0        I: gemm_6_output                            f32(1x1) (7)        
+                                                               O: nl_7_output                              f32(1x1) (11)       
+------ ---------------- ---- --------------- -------- -------- ------------------------------------------- ------------------- 
+
+
+
+Number of operations per c-layer
+------- ------ ------------------------ --------- -------------- 
+c_id    m_id   name (type)                    #op           type 
+------- ------ ------------------------ --------- -------------- 
+0       4      gemm_4 (Dense)             100,480   smul_f32_f32 
+1       4      nl_4_nl (Nonlinearity)         128     op_f32_f32 
+2       5      gemm_5 (Dense)               8,256   smul_f32_f32 
+3       5      nl_5_nl (Nonlinearity)          64     op_f32_f32 
+4       6      gemm_6 (Dense)                  65   smul_f32_f32 
+5       7      nl_7 (Nonlinearity)             10     op_f32_f32 
+------- ------ ------------------------ --------- -------------- 
+total                                     109,003 
+
+Number of operation types
+---------------- --------- ----------- 
+operation type           #           % 
+---------------- --------- ----------- 
+smul_f32_f32       108,801       99.8% 
+op_f32_f32             202        0.2% 
+
+Complexity report (model)
+------ ----------------- ------------------------- ------------------------- -------- 
+m_id   name              c_macc                    c_rom                     c_id     
+------ ----------------- ------------------------- ------------------------- -------- 
+4      arith_constant2   ||||||||||||||||  92.3%   ||||||||||||||||  92.4%   [0, 1]   
+5      arith_constant1   ||                 7.6%   ||                 7.6%   [2, 3]   
+6      arith_constant    |                  0.1%   |                  0.1%   [4]      
+7      nl_7              |                  0.0%   |                  0.0%   [5]      
+------ ----------------- ------------------------- ------------------------- -------- 
+macc=109,003 weights=435,204 act=3,648 ram_io=0
+ 
+ Requested memory size by section - "stm32f7" target
+ ------------------------------ ------- --------- ------- ------- 
+ module                            text    rodata    data     bss 
+ ------------------------------ ------- --------- ------- ------- 
+ NetworkRuntime1020_CM7_GCC.a     7,420         0       0       0 
+ network.o                          540        48   1,808     148 
+ network_data.o                      48        16      88       0 
+ lib (toolchain)*                   712        24       0       0 
+ ------------------------------ ------- --------- ------- ------- 
+ RT total**                       8,720        88   1,896     148 
+ ------------------------------ ------- --------- ------- ------- 
+ weights                              0   435,208       0       0 
+ activations                          0         0       0   3,648 
+ io                                   0         0       0       0 
+ ------------------------------ ------- --------- ------- ------- 
+ TOTAL                            8,720   435,296   1,896   3,796 
+ ------------------------------ ------- --------- ------- ------- 
+ *  toolchain objects (libm/libgcc*)
+ ** RT AI runtime objects (kernels+infrastructure)
+  
+  Summary - "stm32f7" target
+  --------------------------------------------------
+               FLASH (ro)     %*   RAM (rw)       % 
+  --------------------------------------------------
+  RT total         10,704   2.4%      2,044   35.9% 
+  --------------------------------------------------
+  TOTAL           445,912             5,692         
+  --------------------------------------------------
+  *  rt/total
+
+
+Generated files (7)
+------------------------------------------------------------------- 
+C:\Users\Utente\.stm32cubemx\network_output\network_data_params.h   
+C:\Users\Utente\.stm32cubemx\network_output\network_data_params.c   
+C:\Users\Utente\.stm32cubemx\network_output\network_data.h          
+C:\Users\Utente\.stm32cubemx\network_output\network_data.c          
+C:\Users\Utente\.stm32cubemx\network_output\network_config.h        
+C:\Users\Utente\.stm32cubemx\network_output\network.h               
+C:\Users\Utente\.stm32cubemx\network_output\network.c               

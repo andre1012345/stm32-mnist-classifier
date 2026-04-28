@@ -1,0 +1,13 @@
+Debug/
+Release/
+*.elf
+*.bin
+*.map
+*.list
+Drivers/
+Middlewares/
+.settings/
+.metadata/
+*.launch
+.DS_Store
+Thumbs.db
